@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description:  >- # AWS::EC2::Instance stack
+    An AWS CloudFormation Template of a Linux EC2_with_EIP_And_DNS, 
+    using intrinsic funtions like; !Ref: to reference PARAMETERS 
+    and other RESOURCES within the template, and !FindInMap: for 
+    MAPPINGS. 
+
+Metadata:
+  Authors:
+    Description: Rokshana Akhter 
+
+Parameters: 
+
+  # Using a parameter to specify the instance type & refrencing that in the RESOURCE section.
+  InstanceTypeParameter: # logical name/ logical ID
+    Type: String
+    Description: Choose an Instance type
+    Default: t2.micro  # value:parameterProperty
+    AllowedValues: # Other instance types to choose from
+      - t2.micro
+      - m1.small
+      - m1.large
+      - t2.large
+      - t2.nano 
+    ConstraintDescription: must be a valid EC2 instance type.
+
+  #  Creating an SSHLocation in our parameter & referencx. that at our RESOURCE SG' CidrIp
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x
+
+# This is the Amazon Linux 2 AMI. Adjust these values as needed, they can change a few times per year:
+Mappings: # mapping section
+
+  RegionMap: # logical name
+    us-west-2: # top level key
+      HVM64: ami-0747e613a2a1ff483 # Oregon
+    us-east-1:
+      HVM64: ami-0747e613a2a1ff483 # N. Virginia
+    us-east-2:
+      HVM64: ami-0103f211a154d64a6 # Ohio
+      # us-west-1:
+      #   HVM64: ami-0f5e8a042c8bfcd5e # N. California
+      # eu-west-2:
+      #   HVM64: ami-04706e771f950937f # London
+      # eu-north-1:
+      #   HVM64: ami-02aeff1a953c5c2ff # Stockholm
+
+Resources: 
+# Our Linux 2 instance
+  WebServerInstance: # logical name
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceTypeParameter
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", HVM64]
+      # KeyName: !Ref NewKeyPair # Keypair to ssh into the server
+      SubnetId: !ImportValue samplenetworkcross-stack-SubnetID
+
+      SecurityGroupIds: # we reference the output here, using the Fn::Import
+        - !ImportValue 
+          samplenetworkcross-stack-SecurityGroupID
+        - !Ref InstanceSecurityGroup
+      Tags: # Logical name
+        - Key: Name
+          Value: /CrossStack/EC2
+      UserData: !Base64 | # Remember to base64-encode your user-data script. 
+        #!/bin/bash
+        yum update -y
+        yum install httpd -y
+        echo '<html><body><h1 style="color:Blue;">Welcome to CloudSpace website launched through AWS CLOUDFORMATION by Rokshana Akhter</h1></body></html>' > /var/www/html/index.html
+        systemctl start httpd
+        systemctl enable httpd
+        
+   # provisioning an EIP to mount other instances in the future     
+  MyEIP:
+    Type: AWS::EC2::EIP # ProductIdentifier::ResourceType
+    Properties:
+      InstanceId: !Ref WebServerInstance # Logical name; AWS::EC2::Instance resource
+  # Our instance will need a keypair to accessing it
+  # NewKeyPair: # Logical name
+  #   Type: 'AWS::EC2::KeyPair'
+  #   Properties:
+  #     KeyName: jessan-us-west-2-keypair
+
+  # Our EC2 will need a new SG offering an SSH on port 22 from our IP address (AWS best practice)
+  InstanceSecurityGroup: # SG ID/ logical name /logical ID
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable SSH access via port 22
+      VpcId: !ImportValue samplenetworkcross-stack-VPCID
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation # reference the CidrIp from the parameter.
+
+Outputs:
+  PrivateIp: # logical name of property
+    Description: Display the InstancePrivateIP
+    Value: !GetAtt WebServerInstance.PrivateIp # !GetAtt logicalNameOfResource.attributeName
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateIp' # Sub stackname with property name.
+  PrivateDnsName:
+    Description: Display the PrivateDnsName of the EC2 instance
+    Value: !GetAtt WebServerInstance.PrivateDnsName
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateDnsName' #  !Sub replaces the string
+  PublicDnsName:
+    Description: Displaying the PublicDnsName of the EC2 instance 
+    Value: !GetAtt WebServerInstance.PublicDnsName # !GetAtt logicalNameOfResource.attributeName
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicDnsName' 
+  
