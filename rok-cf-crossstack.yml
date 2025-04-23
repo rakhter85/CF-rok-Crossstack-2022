@@ -23,6 +23,10 @@ Parameters:
       - t2.large
       - t2.nano 
     ConstraintDescription: must be a valid EC2 instance type.
+  KeyNameParameter:
+    Description: Name of an existing key
+    Type: AWS::EC2::KeyPair::KeyName #resouce identifier
+    ConstraintDescription: must be a valid keypair
 
   #  Creating an SSHLocation in our parameter & referencx. that at our RESOURCE SG' CidrIp
   SSHLocation:
@@ -41,11 +45,11 @@ Mappings: # mapping section
     us-west-2: # top level key
       HVM64: ami-0747e613a2a1ff483 # Oregon
     us-east-1:
-      HVM64: ami-0747e613a2a1ff483 # N. Virginia
+      HVM64: ami-0e449927258d45bc4 # N. Virginia
     us-east-2:
       HVM64: ami-0103f211a154d64a6 # Ohio
-      # us-west-1:
-      #   HVM64: ami-0f5e8a042c8bfcd5e # N. California
+    us-west-1:
+      HVM64: ami-0ce45259f491c3d4f # N. California
       # eu-west-2:
       #   HVM64: ami-04706e771f950937f # London
       # eu-north-1:
@@ -58,12 +62,13 @@ Resources:
     Properties:
       InstanceType: !Ref InstanceTypeParameter
       ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", HVM64]
-      # KeyName: !Ref NewKeyPair # Keypair to ssh into the server
-      SubnetId: !ImportValue samplenetworkcross-stack-SubnetID
+      KeyName: !Ref KeyNameParameter # Keypair to ssh into the server
+      SubnetId: !ImportValue ExpoPublicSubnetId   
+      # samplenetworkcross-stack-SubnetID #old
 
       SecurityGroupIds: # we reference the output here, using the Fn::Import
-        - !ImportValue 
-          samplenetworkcross-stack-SecurityGroupID
+        - !ImportValue ExpoWebServerSecurityGroup
+          # samplenetworkcross-stack-SecurityGroupID  # old
         - !Ref InstanceSecurityGroup
       Tags: # Logical name
         - Key: Name
@@ -81,18 +86,14 @@ Resources:
     Type: AWS::EC2::EIP # ProductIdentifier::ResourceType
     Properties:
       InstanceId: !Ref WebServerInstance # Logical name; AWS::EC2::Instance resource
-  # Our instance will need a keypair to accessing it
-  # NewKeyPair: # Logical name
-  #   Type: 'AWS::EC2::KeyPair'
-  #   Properties:
-  #     KeyName: jessan-us-west-2-keypair
+
 
   # Our EC2 will need a new SG offering an SSH on port 22 from our IP address (AWS best practice)
   InstanceSecurityGroup: # SG ID/ logical name /logical ID
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Enable SSH access via port 22
-      VpcId: !ImportValue samplenetworkcross-stack-VPCID
+      VpcId: !ImportValue ExpoVPCId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -115,4 +116,10 @@ Outputs:
     Value: !GetAtt WebServerInstance.PublicDnsName # !GetAtt logicalNameOfResource.attributeName
     Export:
       Name: !Sub '${AWS::StackName}-PublicDnsName' 
-  
+  InstanceSecurityGroup:
+    Description: The security group ID to use for public web servers
+    Value: !GetAtt 
+      - InstanceSecurityGroup
+      - GroupId
+    Export:
+      Name: ExpoInstanceSecurityGroup
