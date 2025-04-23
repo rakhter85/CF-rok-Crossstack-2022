@@ -57,22 +57,28 @@ Resources:
           FromPort: '80'
           ToPort: '80'
           CidrIp: 0.0.0.0/0
-
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 173.73.71.235/32
 Outputs:
   VPCId: # resource logical name 
     Description: VPC ID # 
     Value: !Ref VPC # referencing the resource name
     Export:
-      Name: !Sub '${AWS::StackName}-VPCID'
+      Name: ExpoVPCId
+      # Name: !Sub '${AWS::StackName}-VPCID'
   PublicSubnetId:
     Description: The subnet ID to use for public web servers
     Value: !Ref PublicSubnet
     Export:
-      Name: !Sub '${AWS::StackName}-SubnetID' #replacing a string
+      Name: ExpoPublicSubnetId
+      # Name: !Sub '${AWS::StackName}-SubnetID' #replacing a string
   WebServerSecurityGroup:
     Description: The security group ID to use for public web servers
     Value: !GetAtt 
       - WebServerSecurityGroup
       - GroupId
     Export:
-      Name: !Sub '${AWS::StackName}-SecurityGroupID'
+      Name: ExpoWebServerSecurityGroup
+      # Name: !Sub '${AWS::StackName}-SecurityGroupID'
